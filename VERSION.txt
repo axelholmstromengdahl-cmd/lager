@@ -1,0 +1,4 @@
+Klänningslagret – version 2026-10-05 (ae)
+Mobilanpassning: sidan kan inte längre flyttas åt sidan när man zoomar ut. Zoom fungerar som vanligt.
+Kameran läser skriven kod (OCR), version 2.
+Textläsning version 3

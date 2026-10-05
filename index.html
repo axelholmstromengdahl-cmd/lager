@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="theme-color" content="#fafafa">
+  <title>Lager</title>
+  <link rel="stylesheet" href="style.css?v=20261005ae">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141414'/%3E%3Cpath d='M8 12l8-4 8 4v9l-8 4-8-4z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- ============ INLOGGNING ============ -->
+<main id="view-login" class="login" hidden>
+  <form id="login-form" class="card login-card" autocomplete="on">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <h1 class="app-name">Lager</h1>
+    </div>
+    <p class="muted">Logga in med kontot du fått av din admin.</p>
+    <label>E-post
+      <input type="email" name="email" required autocomplete="username" maxlength="254">
+    </label>
+    <label>Lösenord
+      <input type="password" name="password" required autocomplete="current-password" maxlength="72">
+    </label>
+    <p id="login-error" class="error" role="alert" hidden></p>
+    <button class="btn primary big" type="submit">Logga in</button>
+  </form>
+</main>
+
+<!-- ============ APPEN ============ -->
+<div id="view-app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <span class="app-name">Lager</span>
+    </div>
+    <div class="who">
+      <span id="who-name"></span>
+      <span id="who-role" class="badge"></span>
+      <button id="logout" class="btn ghost small" type="button">Logga ut</button>
+    </div>
+  </header>
+
+  <nav id="tabs" class="tabs" hidden>
+    <button data-tab="scan" class="tab active" type="button">Skanna</button>
+    <button data-tab="reserved" class="tab" type="button">Reserverade <span id="res-count" class="tab-count" hidden></span></button>
+    <button data-tab="overview" class="tab" type="button" data-admin>Översikt</button>
+    <button data-tab="products" class="tab" type="button" data-admin>Klänningar</button>
+    <button data-tab="accounts" class="tab" type="button" data-admin>Konton</button>
+    <button data-tab="history" class="tab" type="button" data-admin>Historik</button>
+    <button data-tab="shop" class="tab" type="button" data-admin>Webbshop</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- SKANNA (alla) -->
+    <section id="tab-scan" class="tab-panel">
+      <div class="card scan-card">
+        <div class="mode-switch" role="tablist" aria-label="Hur vill du hitta klänningen?">
+          <button id="mode-scan" class="mode active" type="button" role="tab" aria-selected="true">Skanna</button>
+          <button id="mode-list" class="mode" type="button" role="tab" aria-selected="false">Välj i listan</button>
+        </div>
+
+        <div id="picker" class="picker" hidden>
+          <input id="picker-search" type="search" placeholder="Sök modell, färg eller storlek" autocomplete="off" aria-label="Sök klänning">
+          <div id="picker-list" class="picker-list"></div>
+        </div>
+
+        <div id="scan-box">
+        <div id="reader" class="reader"></div>
+        <div id="cam-tools" class="cam-tools" hidden>
+          <button id="torch" class="btn small" type="button" aria-pressed="false" hidden>Tänd lampan</button>
+          <button id="stop-scan" class="btn small" type="button">Stäng kameran</button>
+        </div>
+        <p id="ocr-status" class="ocr-status" hidden></p>
+        <div id="scan-idle" class="scan-idle">
+          <p class="muted">Rikta kameran mot QR-koden, streckkoden eller den skrivna koden på klänningens lapp.</p>
+          <button id="start-scan" class="btn primary big" type="button">Starta kamera</button>
+        </div>
+
+        <div id="scan-result" class="scan-result" hidden>
+          <div class="result-head">
+            <p class="eyebrow">Skannad klänning</p>
+            <div class="result-tools">
+              <span id="res-new" class="badge warn" hidden>Ny</span>
+              <span id="res-status" class="badge" hidden></span>
+              <button id="res-rename" class="btn small" type="button" hidden>Byt namn</button>
+            </div>
+          </div>
+          <h2 id="res-name"></h2>
+          <div id="fields-view" class="fields-view">
+            <dl class="fields">
+              <dt>Kod</dt><dd id="res-code"></dd>
+              <dt>Färg</dt><dd id="res-color"></dd>
+              <dt>Storlek</dt><dd id="res-size"></dd>
+            </dl>
+            <button id="fields-edit" class="btn small" type="button">Ändra</button>
+          </div>
+          <div id="fields-edit-box" class="fields-edit" hidden>
+            <label id="edit-name-label">Namn
+              <input id="edit-name" maxlength="120" list="name-options" autocomplete="off">
+            </label>
+            <label>Färg
+              <input id="edit-color" maxlength="40" list="color-options" autocomplete="off">
+            </label>
+            <label>Storlek
+              <input id="edit-size" maxlength="20" list="sizes" autocomplete="off">
+            </label>
+            <button id="fields-done" class="btn small" type="button">Klar</button>
+          </div>
+          <datalist id="name-options"></datalist>
+          <datalist id="color-options"></datalist>
+          <p class="price-line" id="res-price"></p>
+          <p class="stock-line" id="res-stock"></p>
+          <p class="stock-line" id="res-avail" hidden></p>
+          <p id="res-note" class="read-note" hidden></p>
+
+          <div class="stepper" role="group" aria-label="Antal">
+            <button id="qty-minus" class="btn step" type="button" aria-label="Minska">−</button>
+            <input id="qty" type="number" inputmode="numeric" min="1" max="1000" value="1" aria-label="Antal">
+            <button id="qty-plus" class="btn step" type="button" aria-label="Öka">+</button>
+          </div>
+
+          <label class="sold-price">Såld för (kr)
+            <input id="sold-price" type="number" inputmode="decimal" min="0" max="9999999" step="1" autocomplete="off">
+          </label>
+
+          <div class="actions three">
+            <button id="res-in" class="btn primary big" type="button">Lägg in</button>
+            <button id="res-sold" class="btn primary big" type="button">Såld</button>
+            <button id="res-reserve" class="btn primary big" type="button">Reserverad</button>
+          </div>
+          <button id="res-go-reserved" class="btn small ghost" type="button" hidden>Visa reserverade</button>
+
+          <div id="reserve-box" class="reserve-box" hidden>
+            <form id="reserve-form" novalidate>
+              <p class="eyebrow">Reservera klänningen</p>
+              <label>Kundens namn <input id="reserve-customer" maxlength="120" autocomplete="off"></label>
+              <label>Telefon eller e-post <input id="reserve-contact" maxlength="120" autocomplete="off"></label>
+              <label>Datum för bröllop eller fest <input id="reserve-date" type="date"></label>
+              <label>Anteckning <input id="reserve-note" maxlength="2000" autocomplete="off"></label>
+              <div class="actions">
+                <button id="reserve-cancel" class="btn" type="button">Avbryt</button>
+                <button class="btn primary" type="submit">Spara reservation</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="photo-step" class="photo-step">
+            <button id="photo-take" class="btn big" type="button">Ta bild</button>
+            <input id="photo-input" type="file" accept="image/*" capture="environment" hidden>
+            <div id="photo-view" class="photo-view" hidden>
+              <img id="photo-preview" alt="Förhandsvisning av fotot">
+              <button id="photo-retake" class="btn big" type="button">Ta om</button>
+            </div>
+          </div>
+
+          <div class="result-foot">
+            <button id="res-fitting" class="btn small ghost" type="button">Provning +1</button>
+            <button id="res-cancel" class="btn small ghost" type="button">Avbryt</button>
+          </div>
+        </div>
+
+
+        <form id="manual-form" class="manual">
+          <label for="manual-code">Eller skriv in koden</label>
+          <div class="row">
+            <input id="manual-code" name="code" placeholder="QR-kod, streckkod eller kod skriven med penna" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+            <button class="btn" type="submit">Sök</button>
+          </div>
+          <p class="hint">Fungerar med appens QR-kod, lappens streckkod, en egen kod skriven med penna (t.ex. M01) eller en handskanner.</p>
+        </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESERVERADE (alla) -->
+    <section id="tab-reserved" class="tab-panel" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Reserverade klänningar</h2>
+          <label class="filter-row">Visa
+            <select id="res-filter">
+              <option value="open">Öppna</option>
+              <option value="sold">Sålda</option>
+              <option value="cancelled">Ångrade</option>
+            </select>
+          </label>
+        </div>
+        <p class="chart-info">Klänningar som är reserverade åt en kund. De finns kvar i lagret men kan inte säljas till någon annan.</p>
+        <div id="reserved-list" class="list"></div>
+      </div>
+      <input id="res-photo-input" type="file" accept="image/*" capture="environment" hidden>
+    </section>
+
+    <!-- ÖVERSIKT (admin) -->
+    <section id="tab-overview" class="tab-panel" hidden>
+      <div class="period" role="group" aria-label="Visa period">
+        <button class="period-btn" type="button" data-period="7" aria-pressed="false">7 dagar</button>
+        <button class="period-btn" type="button" data-period="30" aria-pressed="false">30 dagar</button>
+        <button class="period-btn" type="button" data-period="90" aria-pressed="false">90 dagar</button>
+      </div>
+      <p class="chart-info">Gäller perioden du valt ovan. Procenten jämför med lika lång period innan.</p>
+      <div class="stats" id="stats"></div>
+      <div class="card">
+        <div class="chart-head"><h2>Vilka försäljningar har foto?</h2><span class="muted">de åtta senaste</span></div>
+        <p class="chart-info">De åtta senaste försäljningarna med foto. Tryck på en bild för att se den större.</p>
+        <div id="recent-photos" class="recent-photos"></div>
+      </div>
+      <div class="charts">
+        <div class="card chart-card wide">
+          <div class="chart-head"><h2>Inlagt och sålt per dag</h2></div>
+          <p class="chart-info">Grå stapel = inlagt. Blå stapel = sålt. Båda visas i samma skala. Håll musen över en dag för att se detaljer.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="daily"></select>
+          </label>
+          <div id="ch-daily" class="chart"></div>
+        </div>
+        <div class="card chart-card wide">
+          <div class="chart-head"><h2>Inlagt och sålt per modell</h2></div>
+          <p class="chart-info">De modeller med flest händelser. Grå = inlagt, blå = sålt.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="pairModels"></select>
+          </label>
+          <div id="ch-pair-models" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Är något slut eller nästan slut?</h2></div>
+          <p class="chart-info">Varje del är en grupp klänningar: finns i lager, låg nivå eller slut. Gäller bara klänningar med räknat lager.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="status"></select>
+          </label>
+          <div id="ch-status" class="chart"></div>
+        </div>
+        <div class="card chart-card wide">
+          <div class="chart-head"><h2>Sålt för över tid</h2></div>
+          <p class="chart-info">Hur mycket pengar som kommit in per dag eller vecka. Bara försäljningar som har pris räknas.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="revenue"></select>
+          </label>
+          <div id="ch-revenue" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vinst per modell</h2></div>
+          <p class="chart-info">Vinst = sålt för minus självkostnad (inköpspris och frakt). Störst överst.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="profit"></select>
+          </label>
+          <div id="ch-profit" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Sålt per kollektion</h2></div>
+          <p class="chart-info">Antal sålda per kollektion, med sålt för i tooltipen.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="collection"></select>
+          </label>
+          <div id="ch-collection" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Sålt per typ</h2></div>
+          <p class="chart-info">Antal sålda per typ (brudklänning, festklänning), med sålt för i tooltipen.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="dressType"></select>
+          </label>
+          <div id="ch-type" class="chart"></div>
+        </div>
+        <div class="card">
+          <div class="chart-head"><h2>Vilka klänningar har legat längst i lager?</h2></div>
+          <p class="chart-info">De tio klänningar som stått längst i lager, med pris och lagervärde. Här kan man sänka priset.</p>
+          <div id="ch-stuck" class="list"></div>
+        </div>
+        <div class="card chart-card wide">
+          <div class="chart-head"><h2>Hur mycket finns kvar per modell?</h2></div>
+          <p class="chart-info">Varje bit i cirkeln är en modell. Större bit = fler kvar i lager. Gäller klänningar med räknat lager.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="pieModels"></select>
+          </label>
+          <div id="ch-pie-models" class="chart"></div>
+        </div>
+        <div class="card chart-card wide">
+          <div class="chart-head"><h2>Hur mycket finns kvar per färg?</h2></div>
+          <p class="chart-info">Varje bit i cirkeln är en klädfärg. Större bit = fler kvar i lager.</p>
+<label class="filter-row">Visa modell
+            <select data-mfilter="pieColors"></select>
+          </label>
+          <div id="ch-pie-colors" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Hur många veckor räcker lagret?</h2></div>
+          <p class="chart-info">Antal veckor kvar per modell om den säljs i samma takt som under perioden. Kortast överst.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="need"></select>
+          </label>
+          <div id="ch-need" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vilka modeller säljs mest?</h2></div>
+          <p class="chart-info">Antal sålda under perioden, och hur stor andel av alla sålda det är.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="models"></select>
+          </label>
+          <div id="ch-models" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vilka färger säljs mest?</h2></div>
+          <p class="chart-info">Antal sålda under perioden, och hur stor andel av alla sålda det är.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="colors"></select>
+          </label>
+          <div id="ch-colors" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vilka storlekar säljs mest?</h2></div>
+          <p class="chart-info">En stapel per storlek. Siffran är antal sålda under perioden.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="sizesOut"></select>
+          </label>
+          <div id="ch-sizes-out" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Hur många finns kvar per storlek?</h2></div>
+          <p class="chart-info">En stapel per storlek. Siffran är antal klänningar som finns i lager nu.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="sizesLeft"></select>
+          </label>
+          <div id="ch-sizes-left" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vilka dagar i veckan säljs mest?</h2></div>
+          <p class="chart-info">En stapel per veckodag. Siffran är antal sålda under perioden.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="weekday"></select>
+          </label>
+          <div id="ch-weekday" class="chart"></div>
+        </div>
+        <div class="card chart-card">
+          <div class="chart-head"><h2>Vem har sålt flest?</h2></div>
+          <p class="chart-info">Antal och andel sålda av varje person under perioden. Webbshop visas separat.</p>
+          <label class="filter-row">Visa modell
+            <select data-mfilter="people"></select>
+          </label>
+          <div id="ch-people" class="chart"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="chart-head"><h2>Hur mycket finns kvar per modell?</h2><span class="muted">tryck på en modell för färger och storlekar</span></div>
+        <p class="chart-info">Varje rad är en modell. Siffran är antal kvar av alla färger och storlekar. Tryck på en rad för att se varje variant.</p>
+        <p id="stock-note" class="note" hidden></p>
+        <div id="stock-list" class="stock-list"></div>
+      </div>
+    </section>
+
+    <!-- PRODUKTER (admin) -->
+    <section id="tab-products" class="tab-panel" hidden>
+      <form id="product-form" class="card form-grid">
+        <h2>Ny klänning</h2>
+        <label>Modell <input name="name" required maxlength="120" placeholder="t.ex. Maja midi"></label>
+        <label>Färg <input name="color" maxlength="40" placeholder="t.ex. Svart"></label>
+        <label>Storlek <input name="size" maxlength="20" list="sizes" placeholder="t.ex. M"></label>
+        <label>Antal i lager <input name="quantity" type="number" min="0" max="1000000" value="0" required></label>
+        <label>Varna när under <input name="threshold" type="number" min="0" max="1000000" value="2" required></label>
+        <label>Streckkod eller egen kod <span class="opt">(valfritt)</span>
+          <span class="row">
+            <input name="barcode" maxlength="120" title="3–120 tecken" placeholder="t.ex. M01" autocomplete="off" autocapitalize="characters">
+            <button id="suggest-code" class="btn small" type="button">Föreslå</button>
+          </span></label>
+        <label>Artikelnr i webbshop <span class="opt">(valfritt)</span>
+          <input name="sku" maxlength="64" pattern="[A-Za-z0-9._\-]+" title="Bokstäver, siffror, punkt, bindestreck eller understreck" placeholder="t.ex. MAJA-SV-M" autocomplete="off"></label>
+        <datalist id="sizes"><option value="XS"><option value="S"><option value="M"><option value="L"><option value="XL"><option value="XXL"><option value="34"><option value="36"><option value="38"><option value="40"><option value="42"><option value="44"><option value="46"></datalist>
+        <button class="btn primary" type="submit">Lägg till</button>
+      </form>
+      <div class="card">
+        <div class="card-head">
+          <h2>Alla klänningar</h2>
+          <button id="print-all" class="btn small" type="button">Skriv ut alla QR-etiketter</button>
+        </div>
+        <div class="filters-row">
+          <label>Status <select id="f-status">
+            <option value="">Alla</option><option>I lager</option><option>Reserverad</option><option>Såld</option>
+            <option>Beställd</option><option>Uthyrd</option><option>Hos sömmerska</option>
+          </select></label>
+          <label>Kollektion <select id="f-collection">
+            <option value="">Alla</option><option>Premium</option><option>Exclusive</option><option>Couture</option><option value="-">Ingen</option>
+          </select></label>
+        </div>
+        <div id="product-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- KONTON (admin) -->
+    <section id="tab-accounts" class="tab-panel" hidden>
+      <form id="account-form" class="card form-grid" novalidate>
+        <h2>Nytt konto</h2>
+        <label>Namn <input name="full_name" required maxlength="80"></label>
+        <label>E-post <input name="email" type="email" required maxlength="254" autocomplete="off"></label>
+        <label>Lösenord (minst 10 tecken)
+          <span class="row">
+            <input name="password" type="text" required minlength="10" maxlength="72" autocomplete="new-password">
+            <button id="gen-pw" class="btn small" type="button">Slumpa</button>
+          </span>
+        </label>
+        <label>Roll
+          <select name="role">
+            <option value="worker">Arbetare – bara skanna</option>
+            <option value="admin">Admin – full åtkomst</option>
+          </select>
+        </label>
+        <button class="btn primary" type="submit">Skapa konto</button>
+      </form>
+      <div class="card">
+        <h2>Konton <span id="account-count" class="muted"></span></h2>
+        <div id="account-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- WEBBSHOP (admin) – förberedd men avstängd -->
+    <section id="tab-shop" class="tab-panel" hidden>
+      <div class="card shop-card">
+        <div class="card-head">
+          <h2>Koppling till webbshoppen</h2>
+          <span class="badge off">Inte aktiverad</span>
+        </div>
+        <p class="muted">När kopplingen slås på hålls lagret i appen och i webbshoppen i takt: säljs en klänning online dras den automatiskt från lagret här, och webbshoppen kan hämta aktuellt saldo.</p>
+        <div class="switch-row">
+          <span>Synka lager med webbshoppen</span>
+          <button class="switch" type="button" role="switch" aria-checked="false" disabled aria-describedby="shop-note"><span></span></button>
+        </div>
+        <p id="shop-note" class="note">Kopplingen är förberedd men avstängd. Den aktiveras på servern när er webbshop är redo (se README, "Webbshop-koppling").</p>
+      </div>
+      <div class="card">
+        <h2>Så fungerar det när den är på</h2>
+        <ol class="steps">
+          <li><strong>Artikelnummer:</strong> varje klänning får samma artikelnummer som i webbshoppen (fältet finns redan under Klänningar).</li>
+          <li><strong>Försäljning online:</strong> webbshoppen skickar ordern hit och saldot minskar direkt. Samma order kan aldrig dras två gånger.</li>
+          <li><strong>Saldo till webbshoppen:</strong> webbshoppen hämtar hur många som finns kvar, så att slutsålda storlekar inte kan köpas.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>Förberedelse <span id="sku-count" class="muted"></span></h2>
+        <div id="sku-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- HISTORIK (admin) -->
+    <section id="tab-history" class="tab-panel" hidden>
+      <div class="card">
+        <h2>Senaste händelser</h2>
+        <div class="filters" id="history-filter" role="group" aria-label="Visa">
+          <button class="period-btn" type="button" data-hfilter="all" aria-pressed="true">Alla</button>
+          <button class="period-btn" type="button" data-hfilter="in" aria-pressed="false">Inlagda</button>
+          <button class="period-btn" type="button" data-hfilter="out" aria-pressed="false">Sålda</button>
+        </div>
+        <div id="history-list" class="list"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Dialoger -->
+<dialog id="dlg-qr" class="dialog">
+  <div id="qr-print" class="qr-print"></div>
+  <div class="actions">
+    <button class="btn" type="button" data-close>Stäng</button>
+    <button id="qr-do-print" class="btn primary" type="button">Skriv ut</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-input" class="dialog">
+  <form method="dialog" id="input-form">
+    <h3 id="input-title"></h3>
+    <input id="input-value" required>
+    <div class="actions">
+      <button class="btn" value="cancel" type="button" data-close>Avbryt</button>
+      <button class="btn primary" value="ok" type="submit">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-details" class="dialog details-dialog">
+  <div class="details-head">
+    <h3 id="det-title"></h3>
+    <img id="det-photo" class="det-photo" alt="Produktbild" hidden>
+  </div>
+  <div id="det-stats" class="det-stats"></div>
+  <form id="det-form" novalidate>
+    <div id="det-fields" class="det-fields"></div>
+    <div class="actions">
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit">Spara uppgifter</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-photo" class="dialog photo-dialog">
+  <img id="photo-full" alt="Foto på utskicket" hidden>
+  <p id="photo-status" class="muted"></p>
+  <p id="photo-caption" class="muted"></p>
+  <div class="actions">
+    <button class="btn primary" type="button" data-close>Stäng</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-rename" class="dialog">
+  <form id="rename-form">
+    <h3>Byt namn</h3>
+    <label>Nytt namn
+      <input name="newname" required maxlength="120" list="rename-names" autocomplete="off">
+    </label>
+    <datalist id="rename-names"></datalist>
+    <label class="check">
+      <input name="whole" type="checkbox" checked>
+      <span id="rename-whole-text">Byt på alla med samma namn</span>
+    </label>
+    <div class="actions">
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit">Spara namnet</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm" class="dialog">
+  <form method="dialog">
+    <h3 id="confirm-title"></h3>
+    <p id="confirm-text" class="muted"></p>
+    <div class="actions">
+      <button class="btn" value="no" type="submit">Avbryt</button>
+      <button class="btn danger" value="yes" type="submit">Ta bort</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="chart-tip" class="chart-tip" role="tooltip" hidden></div>
+<div id="notice" class="notice" role="alert" hidden>
+  <p id="notice-text"></p>
+  <button id="notice-close" class="btn small ghost" type="button">Stäng</button>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<div id="print-sheet" class="print-sheet" aria-hidden="true"></div>
+
+<script src="config.js?v=20261005ae"></script>
+<script src="vendor/supabase.js"></script>
+<script src="vendor/html5-qrcode.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="ocr.js?v=20261005ae"></script>
+<script src="demo-mock.js?v=20261005ae"></script>
+<script src="app.js?v=20261005ae"></script>
+</body>
+</html>
